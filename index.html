@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Adaptive Bedtime Story Language Tutor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { font-family: 'Nunito', sans-serif; -webkit-tap-highlight-color: transparent; }
+body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); min-height: 100vh; }
+.stars { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: hidden; }
+.star { position: absolute; background: white; border-radius: 50%; animation: twinkle var(--dur) infinite ease-in-out; }
+@keyframes twinkle { 0%,100% { opacity: 0.2; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
+.moon { position: fixed; top: 30px; right: 30px; width: 60px; height: 60px; background: #ffd700; border-radius: 50%; box-shadow: 0 0 30px #ffd70066, 0 0 60px #ffd70033; z-index: 0; }
+.moon::after { content: ''; position: absolute; top: -5px; left: 10px; width: 50px; height: 50px; background: #1a1a2e; border-radius: 50%; }
+.card { backdrop-filter: blur(10px); background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); }
+.card-solid { background: rgba(255,255,255,0.95); }
+.btn-primary { background: linear-gradient(135deg, #7c3aed, #a855f7); transition: all 0.2s; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(168,85,247,0.4); }
+.btn-primary:active { transform: translateY(0); }
+.btn-secondary { background: linear-gradient(135deg, #f59e0b, #f97316); }
+.btn-secondary:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(245,158,11,0.4); }
+.story-text { line-height: 1.9; font-size: 1.15rem; }
+.story-text .target-word { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #1a1a2e; padding: 1px 6px; border-radius: 6px; font-weight: 700; }
+.story-text .parent-prompt { background: rgba(168,85,247,0.15); border-left: 3px solid #a855f7; padding: 8px 12px; margin: 12px 0; border-radius: 0 8px 8px 0; font-style: italic; font-size: 0.95rem; }
+.progress-ring { transform: rotate(-90deg); }
+.tab-active { background: rgba(168,85,247,0.3); border-color: #a855f7; }
+input, select, textarea { min-height: 44px; }
+.loading-dots span { animation: bounce 1.4s infinite ease-in-out both; }
+.loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+.loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+@keyframes bounce { 0%,80%,100% { transform: scale(0); } 40% { transform: scale(1); } }
+.fade-in { animation: fadeIn 0.5s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.slide-up { animation: slideUp 0.4s ease-out; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(168,85,247,0.3); border-radius: 3px; }
+.vocab-chip { transition: all 0.2s; }
+.vocab-chip:hover { transform: scale(1.05); }
+.print-sheet { background: white; color: #1a1a2e; padding: 24px; }
+@media print { body * { visibility: hidden; } .print-sheet, .print-sheet * { visibility: visible; } .print-sheet { position: absolute; left: 0; top: 0; width: 100%; } }
+</style>
+</head>
+<body class="text-white overflow-x-hidden">
+
+<div class="stars" id="stars"></div>
+<div class="moon"></div>
+
+<div class="relative z-10 max-w-lg mx-auto px-4 pb-24">
+  <!-- Header -->
+  <header class="text-center pt-6 pb-4">
+    <h1 class="text-2xl font-extrabold">🌙 Bedtime Story Tutor</h1>
+    <p class="text-purple-200 text-sm mt-1">Magical stories that grow with your child ✨</p>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="flex gap-2 mb-4 overflow-x-auto pb-2" id="navTabs">
+    <button onclick="showScreen('home')" data-tab="home" class="flex-shrink-0 px-4 py-2 rounded-full border border-white/20 text-sm font-semibold tab-active transition-all min-h-[44px]">📖 Stories</button>
+    <button onclick="showScreen('profile')" data-tab="profile" class="flex-shrink-0 px-4 py-2 rounded-full border border-white/20 text-sm font-semibold transition-all min-h-[44px]">👶 Profile</button>
+    <button onclick="showScreen('progress')" data-tab="progress" class="flex-shrink-0 px-4 py-2 rounded-full border border-white/20 text-sm font-semibold transition-all min-h-[44px]">📊 Progress</button>
+    <button onclick="showScreen('library')" data-tab="library" class="flex-shrink-0 px-4 py-2 rounded-full border border-white/20 text-sm font-semibold transition-all min-h-[44px]">📚 Library</button>
+  </nav>
+
+  <!-- HOME SCREEN -->
+  <div id="screen-home" class="screen">
+    <!-- Child greeting -->
+    <div id="childGreeting" class="card rounded-2xl p-4 mb-4 fade-in hidden">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-full bg-purple-500/30 flex items-center justify-center text-2xl" id="childAvatar">🧒</div>
+        <div>
+          <p class="font-bold" id="childNameDisplay">Set up your child's profile!</p>
+          <p class="text-purple-200 text-xs" id="childLevelDisplay">Tap Profile to get started</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Generate -->
+    <div class="card rounded-2xl p-5 mb-4 slide-up">
+      <h2 class="font-bold text-lg mb-3">✨ Generate Tonight's Story</h2>
+      
+      <div class="mb-3">
+        <label class="text-purple-200 text-xs font-semibold mb-1 block">Story Theme</label>
+        <select id="storyTheme" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white appearance-none">
+          <option value="adventure">🏔️ Adventure</option>
+          <option value="animals">🐻 Animals & Nature</option>
+          <option value="friendship">🤝 Friendship</option>
+          <option value="space">🚀 Space & Stars</option>
+          <option value="ocean">🌊 Ocean & Sea</option>
+          <option value="dinosaurs">🦕 Dinosaurs</option>
+          <option value="fairy_tale">🧚 Fairy Tale</option>
+          <option value="family">👨‍👩‍👧 Family & Home</option>
+          <option value="surprise">🎁 Surprise Me!</option>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="text-purple-200 text-xs font-semibold mb-1 block">Language</label>
+        <select id="storyLanguage" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white appearance-none">
+          <option value="english">🇺🇸 English Only</option>
+          <option value="english_spanish">🇺🇸🇪🇸 English + Spanish</option>
+          <option value="english_french">🇺🇸🇫🇷 English + French</option>
+          <option value="english_mandarin">🇺🇸🇨🇳 English + Mandarin Pinyin</option>
+          <option value="english_arabic">🇺🇸🇸🇦 English + Arabic</option>
+          <option value="english_hindi">🇺🇸🇮🇳 English + Hindi</option>
+        </select>
+      </div>
+
+      <div class="mb-4">
+        <label class="text-purple-200 text-xs font-semibold mb-1 block">Special Request (optional)</label>
+        <input type="text" id="specialRequest" placeholder="e.g. include a bunny named Milo..." class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/40">
+      </div>
+
+      <button onclick="generateStory()" id="generateBtn" class="btn-primary w-full py-4 rounded-xl font-bold text-lg shadow-lg min-h-[52px]">
+        🌟 Create Bedtime Story
+      </button>
+    </div>
+
+    <!-- Loading -->
+    <div id="loadingSection" class="hidden card rounded-2xl p-8 mb-4 text-center">
+      <div class="text-4xl mb-3">📝</div>
+      <p class="font-bold text-lg mb-2">Writing your story...</p>
+      <p class="text-purple-200 text-sm mb-4" id="loadingMessage">Sprinkling some magic words ✨</p>
+      <div class="loading-dots flex justify-center gap-2">
+        <span class="w-3 h-3 bg-purple-400 rounded-full inline-block"></span>
+        <span class="w-3 h-3 bg-purple-400 rounded-full inline-block"></span>
+        <span class="w-3 h-3 bg-purple-400 rounded-full inline-block"></span>
+      </div>
+    </div>
+
+    <!-- Story Display -->
+    <div id="storySection" class="hidden fade-in">
+      <div class="card rounded-2xl p-5 mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-bold text-xl" id="storyTitle">Story Title</h2>
+          <button onclick="toggleSpeech()" id="speechBtn" class="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center text-xl">🔊</button>
+        </div>
+        <div class="text-purple-200 text-xs mb-3 flex gap-2 flex-wrap">
+          <span class="bg-white/10 px-2 py-1 rounded-full" id="storyAge">Age 3-4</span>
+          <span class="bg-white/10 px-2 py-1 rounded-full" id="storyLang">English</span>
+          <span class="bg-white/10 px-2 py-1 rounded-full" id="storyWords">~200 words</span>
+        </div>
+        <div class="story-text text-purple-50" id="storyContent"></div>
+      </div>
+
+      <!-- Vocab targets -->
+      <div class="card rounded-2xl p-5 mb-4" id="vocabSection">
+        <h3 class="font-bold mb-2">🎯 Target Vocabulary</h3>
+        <div class="flex flex-wrap gap-2 mb-3" id="vocabWords"></div>
+        <p class="text-purple-200 text-xs">Tap words your child recognized! They'll be tracked in Progress.</p>
+      </div>
+
+      <!-- Parent Prompts -->
+      <div class="card rounded-2xl p-5 mb-4" id="parentPromptsSection">
+        <h3 class="font-bold mb-2">💡 Parent Interaction Tips</h3>
+        <div id="parentPrompts" class="space-y-2"></div>
+      </div>
+
+      <!-- Language Games -->
+      <div class="card rounded-2xl p-5 mb-4" id="gamesSection">
+        <h3 class="font-bold mb-2">🎮 Follow-up Language Games</h3>
+        <div id="languageGames" class="space-y-2"></div>
+      </div>
+
+      <!-- Story Image -->
+      <div class="card rounded-2xl p-5 mb-4" id="storyImageSection">
+        <h3 class="font-bold mb-2">🎨 Story Illustration</h3>
+        <div id="storyImageContainer" class="rounded-xl overflow-hidden">
+          <button onclick="generateStoryImage()" id="genImageBtn" class="btn-secondary w-full py-3 rounded-xl font-bold">🖼️ Generate Illustration</button>
+          <div id="storyImageLoading" class="hidden text-center py-8">
+            <div class="loading-dots flex justify-center gap-2">
+              <span class="w-3 h-3 bg-amber-400 rounded-full inline-block"></span>
+              <span class="w-3 h-3 bg-amber-400 rounded-full inline-block"></span>
+              <span class="w-3 h-3 bg-amber-400 rounded-full inline-block"></span>
+            </div>
+            <p class="text-sm text-purple-200 mt-2">Painting your illustration...</p>
+          </div>
+          <img id="storyImage" class="hidden w-full rounded-xl" alt="Story illustration">
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex gap-3 mb-4">
+        <button onclick="saveStory()" class="flex-1 card rounded-xl py-3 font-semibold text-center min-h-[44px]">💾 Save</button>
+        <button onclick="exportPrintable()" class="flex-1 card rounded-xl py-3 font-semibold text-center min-h-[44px]">🖨️ Print</button>
+        <button onclick="generateStory()" class="flex-1 card rounded-xl py-3 font-semibold text-center min-h-[44px]">🔄 New</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROFILE SCREEN -->
+  <div id="screen-profile" class="screen hidden">
+    <div class="card rounded-2xl p-5 mb-4 slide-up">
+      <h2 class="font-bold text-lg mb-4">👶 Child's Profile</h2>
+      
+      <div class="mb-3">
+        <label class="text-purple-200 text-xs font-semibold mb-1 block">Child's Name</label>
+        <input type="text" id="childName" placeholder="e.g. Emma" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/40">
+      </div>
+
+      <div class="mb-3">
+        <label class="text-purple-200 text-xs font-semibold mb-1 block">Age</label>
+        <select id="childAge" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white appearance-none">
+          <option value="2">2 years old</option>
+          <option value="3" selected>3 years old</option>
+          <option value="4">4 years old</option>
+          <option value="5">5 years old</option>
+          <option value="6">6 years old</option>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="text-purple-200 text-xs font-semibold mb-1 block">Vocabulary Level</label>
+        <select id="vocabLevel" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white appearance-none">
+          <option value="beginner">🌱 Beginner - Simple words & short sentences</option>
+          <option value="developing" selected>🌿 Developing - Growing vocabulary, 3-4 word sentences</option>
+          <option value="intermediate">🌳 Intermediate - Good vocab, longer sentences</option>
+          <option value="advanced">🌲 Advanced - Rich vocabulary, complex ideas</option>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="text-purple-200 text-xs font-semibold mb-1 block">Target Phonemes / Sounds (optional)</label>
+        <input type="text" id="targetPhonemes" placeholder="e.g. sh, ch, th, r, l" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/40">
+      </div>
+
+      <div class="mb-3">
+        <label class="text-purple-200 text-xs font-semibold mb-1 block">Family Values to Include</label>
+        <div class="flex flex-wrap gap-2" id="valuesSelector">
+          <button onclick="toggleValue(this)" data-value="kindness" class="value-chip px-3 py-2 rounded-full border border-white/20 text-sm min-h-[44px] transition-all">💝 Kindness</button>
+          <button onclick="toggleValue(this)" data-value="sharing" class="value-chip px-3 py-2 rounded-full border border-white/20 text-sm min-h-[44px] transition-all">🤲 Sharing</button>
+          <button onclick="toggleValue(this)" data-value="bravery" class="value-chip px-3 py-2 rounded-full border border-white/20 text-sm min-h-[44px] transition-all">🦁 Bravery</button>
+          <button onclick="toggleValue(this)" data-value="curiosity" class="value-chip px-3 py-2 rounded-full border border-white/20 text-sm min-h-[44px] transition-all">🔍 Curiosity</button>
+          <button onclick="toggleValue(this)" data-value="gratitude" class="value-chip px-3 py-2 rounded-full border border-white/20 text-sm min-h-[44px] transition-all">🙏 Gratitude</button>
+          <button onclick="toggleValue(this)" data-value="patience" class="value-chip px-3 py-2 rounded-full border border-white/20 text-sm min-h-[44px] transition-all">⏳ Patience</button>
+          <button onclick="toggleValue(this)" data-value="respect" class="value-chip px-3 py-2 rounded-full border border-white/20 text-sm min-h-[44px] transition-all">🌟 Respect</button>
+          <button onclick="toggleValue(this)" data-value="creativity" class="value-chip px-3 py-2 rounded-full border border-white/20 text-sm min-h-[44px] transition-all">🎨 Creativity</button>
+          <button onclick="toggleValue(this)" data-value="faith" class="value-chip px-3 py-2 rounded-full border border-white/20 text-sm min-h-[44px] transition-all">🕊️ Faith</button>
+          <button onclick="toggleValue(this)" data-value="teamwork" class="value-chip px-3 py-2 rounded-full border border-white/20 text-sm min-h-[44px] transition-all">🤝 Teamwork</button>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="text-purple-200 text-xs font-semibold mb-1 block">Interests (helps personalize stories)</label>
+        <input type="text" id="childInterests" placeholder="e.g. dogs, trains, princesses, robots" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/40">
+      </div>
+
+      <button onclick="saveProfile()" class="btn-primary w-full py-4 rounded-xl font-bold text-lg min-h-[52px]">
+        💾 Save Profile
+      </button>
+      <p id="profileSaved" class="hidden text-green-400 text-center text-sm mt-2">✅ Profile saved!</p>
+    </div>
+  </div>
+
+  <!-- PROGRESS SCREEN -->
+  <div id="screen-progress" class="screen hidden">
+    <div class="card rounded-2xl p-5 mb-4 slide-up">
+      <h2 class="font-bold text-lg mb-3">📊 Language Progress</h2>
+      
+      <div class="flex items-center gap-4 mb-4">
+        <div class="relative">
+          <svg class="progress-ring w-20 h-20">
+            <circle cx="40" cy="40" r="35" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="6"/>
+            <circle id="progressCircle" cx="40" cy="40" r="35" fill="none" stroke="#a855f7" stroke-width="6" stroke-dasharray="220" stroke-dashoffset="220" stroke-linecap="round"/>
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center font-bold text-lg" id="progressPercent">0%</div>
+        </div>
+        <div>
+          <p class="font-bold" id="wordsLearned">0 words learned</p>
+          <p class="text-purple-200 text-sm" id="storiesRead">0 stories read</p>
+          <p class="text-purple-200 text-sm" id="currentStreak">0 day streak 🔥</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card rounded-2xl p-5 mb-4">
+      <h3 class="font-bold mb-3">🎯 Vocabulary Mastered</h3>
+      <div id="masteredWords" class="flex flex-wrap gap-2">
+        <p class="text-purple-200 text-sm">No words tracked yet. Generate a story and tap words your child recognizes!</p>
+      </div>
+    </div>
+
+    <div class="card rounded-2xl p-5 mb-4">
+      <h3 class="font-bold mb-3">📅 Recent Sessions</h3>
+      <div id="recentSessions" class="space-y-2">
+        <p class="text-purple-200 text-sm">No sessions yet. Start your first story tonight! 🌙</p>
+      </div>
+    </div>
+
+    <div class="card rounded-2xl p-5 mb-4">
+      <h3 class="font-bold mb-3">💡 AI Recommendation</h3>
+      <button onclick="getRecommendation()" id="recBtn" class="btn-secondary w-full py-3 rounded-xl font-bold min-h-[44px]">🤖 Get Personalized Tip</button>
+      <div id="recommendation" class="hidden mt-3 text-purple-100 text-sm"></div>
+    </div>
+  </div>
+
+  <!-- LIBRARY SCREEN -->
+  <div id="screen-library" class="screen hidden">
+    <div class="card rounded-2xl p-5 mb-4 slide-up">
+      <h2 class="font-bold text-lg mb-3">📚 Story Library</h2>
+      <div id="libraryList" class="space-y-3">
+        <p class="text-purple-200 text-sm text-center py-4">No saved stories yet.<br>Generate and save your first story! 🌟</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Print Sheet (hidden, used for export) -->
+  <div id="printSheet" class="print-sheet hidden fixed top-0 left-0 w-full z-50"></div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-full font-semibold shadow-lg hidden z-50 transition-all"></div>
+
+<!-- Error Modal -->
+<div id="errorModal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 hidden">
+  <div class="card-solid rounded-2xl p-6 max-w-sm w-full text-gray-800">
+    <h3 class="font-bold text-lg mb-2">⚠️ Oops!</h3>
+    <p id="errorMessage" class="text-sm mb-4"></p>
+    <button onclick="document.getElementById('errorModal').classList.add('hidden')" class="btn-primary w-full py-3 rounded-xl font-bold text-white min-h-[44px]">Got it</button>
+  </div>
+</div>
+
+<script>
+// Global AI tracking
+window.aiTotalInputTokens = 0;
+window.aiTotalOutputTokens = 0;
+window.aiTotalTime = 0;
+window.aiAliasTimes = {};
+
+let currentStory = null;
+let speechUtterance = null;
+let isSpeaking = false;
+
+// Initialize stars
+(function createStars() {
+  const container = document.getElementById('stars');
+  for (let i = 0; i < 50; i++) {
+    const star = document.createElement('div');
+    star.className = 'star';
+    const size = Math.random() * 3 + 1;
+    star.style.cssText = `width:${size}px;height:${size}px;top:${Math.random()*100}%;left:${Math.random()*100}%;--dur:${Math.random()*3+2}s;animation-delay:${Math.random()*3}s`;
+    container.appendChild(star);
+  }
+})();
+
+// Storage helpers
+function getProfile() {
+  return JSON.parse(localStorage.getItem('bst_profile') || 'null');
+}
+function saveProfileData(data) {
+  localStorage.setItem('bst_profile', JSON.stringify(data));
+}
+function getProgress() {
+  return JSON.parse(localStorage.getItem('bst_progress') || '{"wordsLearned":[],"storiesRead":0,"sessions":[],"streak":0,"lastDate":""}');
+}
+function saveProgressData(data) {
+  localStorage.setItem('bst_progress', JSON.stringify(data));
+}
+function getLibrary() {
+  return JSON.parse(localStorage.getItem('bst_library') || '[]');
+}
+function saveLibraryData(data) {
+  localStorage.setItem('bst_library', JSON.stringify(data));
+}
+
+// Screen navigation
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  document.getElementById('screen-' + name).classList.remove('hidden');
+  document.querySelectorAll('#navTabs button').forEach(b => {
+    b.classList.toggle('tab-active', b.dataset.tab === name);
+  });
+  if (name === 'progress') updateProgressUI();
+  if (name === 'library') updateLibraryUI();
+  if (name === 'profile') loadProfileUI();
+  if (name === 'home') updateGreeting();
+}
+
+// Toast
+function showToast(msg, duration = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  setTimeout(() => t.classList.add('hidden'), duration);
+}
+
+// Error
+function showError(msg) {
+  document.getElementById('errorMessage').textContent = msg;
+  document.getElementById('errorModal').classList.remove('hidden');
+}
+
+// AI Call with retry
+async function callAI(alias, params, retries = 3) {
+  const start = Date.now();
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch('https://16504442930.work/run_prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alias, params })
+      });
+      const data = await res.json();
+      if (data.error) {
+        if (i === retries - 1) {
+          const errMsg = await formatError(data);
+          throw new Error(errMsg);
+        }
+        continue;
+      }
+      const elapsed = Date.now() - start;
+      window.aiTotalTime += elapsed;
+      window.aiAliasTimes[alias] = (window.aiAliasTimes[alias] || 0) + elapsed;
+      if (data.input_tokens) window.aiTotalInputTokens += data.input_tokens;
+      if (data.output_tokens) window.aiTotalOutputTokens += data.output_tokens;
+      return data;
+    } catch (e) {
+      if (i === retries - 1) {
+        try {
+          const errMsg = await formatError({ error: e.message });
+          throw new Error(errMsg);
+        } catch (e2) {
+          throw new Error(e.message);
+        }
+      }
+    }
+  }
+}
+
+async function formatError(apiResponse) {
+  try {
+    const res = await callAI('genericAI', {
+      prompt: `Reformat this API error into a friendly, empowering message for a parent using a bedtime story app. Include what they can do to fix it. Return JSON with key "message" as a string. API Response: ${JSON.stringify(apiResponse)}`
+    }, 1);
+    return res.message || 'Something went wrong. Please try again in a moment!';
+  } catch {
+    return `Something went wrong. Please try again. (Details: ${JSON.stringify(apiResponse)})`;
+  }
+}
+
+// Profile
+function toggleValue(btn) {
+  btn.classList.toggle('bg-purple-500/40');
+  btn.classList.toggle('border-purple-400');
+}
+
+function loadProfileUI() {
+  const p = getProfile();
+  if (!p) return;
+  document.getElementById('childName').value = p.name || '';
+  document.getElementById('childAge').value = p.age || '3';
+  document.getElementById('vocabLevel').value = p.vocabLevel || 'developing';
+  document.getElementById('targetPhonemes').value = p.phonemes || '';
+  document.getElementById('childInterests').value = p.interests || '';
+  document.querySelectorAll('.value-chip').forEach(btn => {
+    if ((p.values || []).includes(btn.dataset.value)) {
+      btn.classList.add('bg-purple-500/40', 'border-purple-400');
+    }
+  });
+}
+
+function saveProfile() {
+  const values = [];
+  document.querySelectorAll('.value-chip.bg-purple-500\\/40').forEach(b => values.push(b.dataset.value));
+  const data = {
+    name: document.getElementById('childName').value.trim(),
+    age: document.getElementById('childAge').value,
+    vocabLevel: document.getElementById('vocabLevel').value,
+    phonemes: document.getElementById('targetPhonemes').value.trim(),
+    interests: document.getElementById('childInterests').value.trim(),
+    values
+  };
+  saveProfileData(data);
+  document.getElementById('profileSaved').classList.remove('hidden');
+  setTimeout(() => document.getElementById('profileSaved').classList.add('hidden'), 2000);
+  updateGreeting();
+  showToast('✅ Profile saved!');
+}
+
+function updateGreeting() {
+  const p = getProfile();
+  const el = document.getElementById('childGreeting');
+  el.classList.remove('hidden');
+  if (p && p.name) {
+    document.getElementById('childNameDisplay').textContent = `Goodnight, ${p.name}! 🌙`;
+    const levels = { beginner: '🌱 Beginner', developing: '🌿 Developing', intermediate: '🌳 Intermediate', advanced: '🌲 Advanced' };
+    document.getElementById('childLevelDisplay').textContent = `Age ${p.age} · ${levels[p.vocabLevel] || 'Developing'}`;
+    const avatars = ['🧒', '👧', '👦', '🧒🏽', '👧🏻', '👦🏿'];
+    document.getElementById('childAvatar').textContent = avatars[p.name.length % avatars.length];
+  } else {
+    document.getElementById('childNameDisplay').textContent = 'Welcome! Set up a profile first 👋';
+    document.getElementById('childLevelDisplay').textContent = 'Tap Profile tab to get started';
+  }
+}
+
+// Story Generation
+async function generateStory() {
+  const profile = getProfile();
+  const theme = document.getElementById('storyTheme').value;
+  const language = document.getElementById('storyLanguage').value;
+  const special = document.getElementById('specialRequest').value.trim();
+
+  document.getElementById('storySection').classList.add('hidden');
+  document.getElementById('loadingSection').classList.remove('hidden');
+  document.getElementById('generateBtn').disabled = true;
+
+  const loadingMessages = ['Sprinkling some magic words ✨', 'Finding the perfect characters 🐰', 'Building a cozy world 🏡', 'Adding vocabulary sparkles 📚', 'Weaving the story threads 🧶'];
+  let msgIdx = 0;
+  const msgInterval = setInterval(() => {
+    msgIdx = (msgIdx + 1) % loadingMessages.length;
+    document.getElementById('loadingMessage').textContent = loadingMessages[msgIdx];
+  }, 2000);
+
+  const childName = profile?.name || 'the child';
+  const childAge = profile?.age || 3;
+  const vocabLevel = profile?.vocabLevel || 'developing';
+  const phonemes = profile?.phonemes || '';
+  const interests = profile?.interests || '';
+  const values = (profile?.values || ['kindness']).join(', ');
+  const progress = getProgress();
+  const knownWords = progress.wordsLearned.slice(-20).join(', ') || 'none tracked yet';
+
+  const langMap = {
+    'english': 'English only',
+    'english_spanish': 'bilingual English and Spanish (provide translations inline in parentheses)',
+    'english_french': 'bilingual English and French (provide translations inline in parentheses)',
+    'english_mandarin': 'bilingual English and Mandarin Pinyin (provide translations inline in parentheses)',
+    'english_arabic': 'bilingual English and Arabic (provide translations inline in parentheses)',
+    'english_hindi': 'bilingual English and Hindi (provide translations inline in parentheses)'
+  };
+
+  const vocabGuide = {
+    beginner: '50-100 word story, very simple 2-3 word sentences, basic concrete nouns and verbs, lots of repetition',
+    developing: '150-200 word story, 3-5 word sentences, introduce some adjectives and prepositions, moderate repetition',
+    intermediate: '200-300 word story, varied sentence lengths, include descriptive language and some abstract concepts, some compound sentences',
+    advanced: '300-400 word story, rich vocabulary, complex sentences, introduce figurative language and more nuanced emotions'
+  };
+
+  const prompt = `You are an expert early childhood language development specialist and children's story author. Create a bedtime story with these exact specifications:
+
+CHILD PROFILE:
+- Name: ${childName}
+- Age: ${childAge} years old
+- Vocabulary Level: ${vocabLevel} (${vocabGuide[vocabLevel]})
+- Target phoneme sounds to emphasize: ${phonemes || 'no specific phonemes'}
+- Interests: ${interests || 'general'}
+- Already known words (avoid over-targeting these): ${knownWords}
+
+STORY REQUIREMENTS:
+- Theme: ${theme === 'surprise' ? 'choose a delightful theme' : theme}
+- Language: ${langMap[language]}
+- Family values to weave in naturally: ${values}
+- Special request: ${special || 'none'}
+- Must be calming and suitable for bedtime
+- Include the child's name naturally in the story as a character or listener
+
+TARGET 5-8 new vocabulary words appropriate for the child's level that appear naturally in context. For words the child is working on phonemically, include extra words with those sounds.
+
+Return a JSON object with exactly this structure:
+{
+  "title": string (creative story title),
+  "story": string (the full story text, use \\n\\n for paragraph breaks),
+  "targetWords": string[] (array of 5-8 target vocabulary words used in the story),
+  "parentPrompts": string[] (array of 4-5 interaction prompts for the parent to use during/after reading, e.g. "Point to X and ask: What sound does a Y make?"),
+  "languageGames": string[] (array of 3 follow-up language game suggestions tied to the story vocabulary),
+  "wordCount": number (approximate word count of the story),
+  "ageRange": string (e.g. "3-4"),
+  "phonemesUsed": string[] (phoneme sounds emphasized in the story)
+}`;
+
+  try {
+    const result = await callAI('genericAI', { prompt });
+    clearInterval(msgInterval);
+    currentStory = result;
+    displayStory(result);
+    
+    // Update progress
+    const prog = getProgress();
+    prog.storiesRead++;
+    const today = new Date().toISOString().split('T')[0];
+    if (prog.lastDate !== today) {
+      if (prog.lastDate === new Date(Date.now() - 86400000).toISOString().split('T')[0]) {
+        prog.streak++;
+      } else if (prog.lastDate !== today) {
+        prog.streak = 1;
+      }
+      prog.lastDate = today;
+    }
+    prog.sessions.unshift({ date: today, title: result.title, theme, words: result.targetWords || [] });
+    if (prog.sessions.length > 30) prog.sessions = prog.sessions.slice(0, 30);
+    saveProgressData(prog);
+  } catch (e) {
+    clearInterval(msgInterval);
+    showError(e.message);
+  } finally {
+    document.getElementById('loadingSection').classList.add('hidden');
+    document.getElementById('generateBtn').disabled = false;
+  }
+}
+
+function displayStory(data) {
+  document.getElementById('storyTitle').textContent = data.title || 'Untitled Story';
+  document.getElementById('storyAge').textContent = `Age ${data.ageRange || '3-4'}`;
+  const langLabel = document.getElementById('storyLanguage').options[document.getElementById('storyLanguage').selectedIndex].text;
+  document.getElementById('storyLang').textContent = langLabel;
+  document.getElementById('storyWords').textContent = `~${data.wordCount || '?'} words`;
+
+  // Process story text - highlight target words
+  let storyHtml = (data.story || '').replace(/\n\n/g, '</p><p class="mt-3">');
+  storyHtml = '<p>' + storyHtml + '</p>';
+  (data.targetWords || []).forEach(word => {
+    const regex = new RegExp(`\\b(${word})\\b`, 'gi');
+    storyHtml = storyHtml.replace(regex, '<span class="target-word">$1</span>');
+  });
+  document.getElementById('storyContent').innerHTML = storyHtml;
+
+  // Vocab words
+  const vocabContainer = document.getElementById('vocabWords');
+  vocabContainer.innerHTML = '';
+  (data.targetWords || []).forEach(word => {
+    const chip = document.createElement('button');
+    chip.className = 'vocab-chip px-3 py-2 rounded-full border border-amber-400/50 bg-amber-400/10 text-sm font-semibold min-h-[44px]';
+    chip.textContent = `⭐ ${word}`;
+    chip.onclick = () => markWordLearned(word, chip);
+    vocabContainer.appendChild(chip);
+  });
+
+  // Parent prompts
+  const promptsContainer = document.getElementById('parentPrompts');
+  promptsContainer.innerHTML = '';
+  (data.parentPrompts || []).forEach(prompt => {
+    const div = document.createElement('div');
+    div.className = 'bg-purple-500/10 border-l-3 border-purple-400 p-3 rounded-r-lg text-sm text-purple-100';
+    div.style.borderLeft = '3px solid #a855f7';
+    div.textContent = prompt;
+    promptsContainer.appendChild(div);
+  });
+
+  // Language games
+  const gamesContainer = document.getElementById('languageGames');
+  gamesContainer.innerHTML = '';
+  (data.languageGames || []).forEach(game => {
+    const div = document.createElement('div');
+    div.className = 'bg-amber-500/10 border-l-3 border-amber-400 p-3 rounded-r-lg text-sm text-purple-100';
+    div.style.borderLeft = '3px solid #f59e0b';
+    div.textContent = game;
+    gamesContainer.appendChild(div);
+  });
+
+  // Reset image
+  document.getElementById('genImageBtn').classList.remove('hidden');
+  document.getElementById('storyImage').classList.add('hidden');
+  document.getElementById('storyImageLoading').classList.add('hidden');
+
+  document.getElementById('storySection').classList.remove('hidden');
+  document.getElementById('storySection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function markWordLearned(word, chip) {
+  const prog = getProgress();
+  if (!prog.wordsLearned.includes(word.toLowerCase())) {
+    prog.wordsLearned.push(word.toLowerCase());
+    saveProgressData(prog);
+  }
+  chip.classList.remove('bg-amber-400/10', 'border-amber-400/50');
+  chip.classList.add('bg-green-500/30', 'border-green-400');
+  chip.textContent = `✅ ${word}`;
+  showToast(`🌟 "${word}" marked as recognized!`);
+}
+
+// Speech
+function toggleSpeech() {
+  if (isSpeaking) {
+    window.speechSynthesis.cancel();
+    isSpeaking = false;
+    document.getElementById('speechBtn').textContent = '🔊';
+    return;
+  }
+  if (!currentStory?.story) return;
+  speechUtterance = new SpeechSynthesisUtterance(currentStory.story.replace(/\n/g, ' '));
+  speechUtterance.rate = 0.85;
+  speechUtterance.pitch = 1.1;
+  speechUtterance.onend = () => {
+    isSpeaking = false;
+    document.getElementById('speechBtn').textContent = '🔊';
+  };
+  window.speechSynthesis.speak(speechUtterance);
+  isSpeaking = true;
+  document.getElementById('speechBtn').textContent = '⏸️';
+}
+
+// Image generation
+async function generateStoryImage() {
+  if (!currentStory) return;
+  document.getElementById('genImageBtn').classList.add('hidden');
+  document.getElementById('storyImageLoading').classList.remove('hidden');
+
+  const imgPrompt = `A cute, warm, child-friendly illustration for a bedtime story titled "${currentStory.title}". Style: soft watercolor, dreamy pastel colors, gentle and cozy atmosphere. Safe for young children ages 2-6. No text. Whimsical and magical.`;
+
+  try {
+    const result = await callAI('imageGen', { prompt: imgPrompt });
+    if (result && result.data) {
+      const uuid = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await fetch('https://16504442930.work/write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: uuid, value: result.data })
+      });
+      const imgUrl = `https://16504442930.work/serve_image?key=${uuid}`;
+      document.getElementById('storyImage').src = imgUrl;
+      document.getElementById('storyImage').classList.remove('hidden');
+      currentStory.imageUrl = imgUrl;
+    }
+  } catch (e) {
+    document.getElementById('genImageBtn').classList.remove('hidden');
+    showToast('Could not generate image, try again');
+  } finally {
+    document.getElementById('storyImageLoading').classList.add('hidden');
+  }
+}
+
+// Save story
+function saveStory() {
+  if (!currentStory) return;
+  const lib = getLibrary();
+  lib.unshift({
+    ...currentStory,
+    savedAt: new Date().toISOString(),
+    theme: document.getElementById('storyTheme').value,
+    language: document.getElementById('storyLanguage').value
+  });
+  if (lib.length > 50) lib.pop();
+  saveLibraryData(lib);
+  showToast('💾 Story saved to library!');
+}
+
+// Export printable
+function exportPrintable() {
+  if (!currentStory) return;
+  const sheet = document.getElementById('printSheet');
+  const profile = getProfile();
+  sheet.innerHTML = `
+    <div style="max-width:600px;margin:0 auto;padding:24px;font-family:Georgia,serif;">
+      <h1 style="text-align:center;font-size:24px;margin-bottom:4px;">🌙 ${currentStory.title}</h1>
+      <p style="text-align:center;color:#666;font-size:12px;margin-bottom:20px;">A bedtime story for ${profile?.name || 'your little one'} · Age ${currentStory.ageRange || '3-4'}</p>
+      <hr style="margin-bottom:16px;">
+      <div style="font-size:14px;line-height:2;">${(currentStory.story || '').replace(/\n\n/g, '</p><p style="margin-top:12px;">')}</div>
+      <hr style="margin:16px 0;">
+      <h3 style="font-size:14px;">🎯 Vocabulary Words</h3>
+      <p style="font-size:13px;">${(currentStory.targetWords || []).join(' · ')}</p>
+      <h3 style="font-size:14px;margin-top:12px;">💡 Parent Prompts</h3>
+      <ul style="font-size:12px;">${(currentStory.parentPrompts || []).map(p => `<li style="margin:4px 0;">${p}</li>`).join('')}</ul>
+      <h3 style="font-size:14px;margin-top:12px;">🎮 Language Games</h3>
+      <ul style="font-size:12px;">${(currentStory.languageGames || []).map(g => `<li style="margin:4px 0;">${g}</li>`).join('')}</ul>
+      ${currentStory.imageUrl ? `<img src="${currentStory.imageUrl}" style="width:100%;max-width:400px;margin:16px auto;display:block;border-radius:12px;">` : ''}
+      <p style="text-align:center;color:#999;font-size:10px;margin-top:20px;">Generated by Bedtime Story Language Tutor 🌙</p>
+      <button onclick="window.print();document.getElementById('printSheet').classList.add('hidden');" style="display:block;margin:16px auto;padding:12px 24px;background:#7c3aed;color:white;border:none;border-radius:8px;font-size:16px;cursor:pointer;">🖨️ Print This Page</button>
+      <button onclick="document.getElementById('printSheet').classList.add('hidden');" style="display:block;margin:8px auto;padding:8px 24px;background:#eee;color:#333;border:none;border-radius:8px;font-size:14px;cursor:pointer;">Close Preview</button>
+    </div>
+  `;
+  sheet.classList.remove('hidden');
+}
+
+// Progress UI
+function updateProgressUI() {
+  const prog = getProgress();
+  const totalWords = prog.wordsLearned.length;
+  const goalWords = 100;
+  const percent = Math.min(100, Math.round((totalWords / goalWords) * 100));
+
+  document.getElementById('progressPercent').textContent = percent + '%';
+  const circle = document.getElementById('progressCircle');
+  const offset = 220 - (220 * percent / 100);
+  circle.style.strokeDashoffset = offset;
+
+  document.getElementById('wordsLearned').textContent = `${totalWords} words learned`;
+  document.getElementById('storiesRead').textContent = `${prog.storiesRead} stories read`;
+  document.getElementById('currentStreak').textContent = `${prog.streak} day streak 🔥`;
+
+  // Mastered words
+  const masteredEl = document.getElementById('masteredWords');
+  if (prog.wordsLearned.length > 0) {
+    masteredEl.innerHTML = prog.wordsLearned.map(w =>
+      `<span class="bg-green-500/20 text-green-300 px-3 py-1 rounded-full text-sm">✅ ${w}</span>`
+    ).join('');
+  } else {
+    masteredEl.innerHTML = '<p class="text-purple-200 text-sm">No words tracked yet.</p>';
+  }
+
+  // Recent sessions
+  const sessEl = document.getElementById('recentSessions');
+  if (prog.sessions.length > 0) {
+    sessEl.innerHTML = prog.sessions.slice(0, 10).map(s => `
+      <div class="bg-white/5 rounded-lg p-3 flex justify-between items-center">
+        <div>
+          <p class="font-semibold text-sm">${s.title || 'Story'}</p>
+          <p class="text-purple-200 text-xs">${s.date} · ${(s.words || []).length} target words</p>
+        </div>
+        <span class="text-lg">📖</span>
+      </div>
+    `).join('');
+  }
+}
+
+// AI Recommendation
+async function getRecommendation() {
+  const btn = document.getElementById('recBtn');
+  btn.disabled = true;
+  btn.textContent = 'Thinking... 🤔';
+
+  const profile = getProfile();
+  const progress = getProgress();
+
+  const prompt = `You are an expert speech-language pathologist and early childhood educator. Based on this child's profile and progress, give one specific, actionable recommendation for their next language development step.
+
+Child: ${profile?.name || 'Unknown'}, Age ${profile?.age || 3}, Level: ${profile?.vocabLevel || 'developing'}
+Words learned so far: ${progress.wordsLearned.length} (${progress.wordsLearned.slice(-10).join(', ')})
+Stories read: ${progress.storiesRead}
+Target phonemes: ${profile?.phonemes || 'none specified'}
+
+Return JSON with:
+{
+  "recommendation": string (2-3 sentences of specific advice),
+  "suggestedTheme": string (best story theme for next session),
+  "focusArea": string (what to focus on next)
+}`;
+
+  try {
+    const result = await callAI('genericAI', { prompt });
+    const recEl = document.getElementById('recommendation');
+    recEl.innerHTML = `
+      <div class="bg-purple-500/10 rounded-lg p-3 mb-2">
+        <p class="font-semibold text-sm mb-1">💡 ${result.focusArea || 'Next Steps'}</p>
+        <p>${result.recommendation || 'Keep reading together every night!'}</p>
+      </div>
+      <p class="text-xs text-purple-300">Suggested next theme: <strong>${result.suggestedTheme || 'Any'}</strong></p>
+    `;
+    recEl.classList.remove('hidden');
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 Get Personalized Tip';
+  }
+}
+
+// Library UI
+function updateLibraryUI() {
+  const lib = getLibrary();
+  const el = document.getElementById('libraryList');
+  if (lib.length === 0) {
+    el.innerHTML = '<p class="text-purple-200 text-sm text-center py-4">No saved stories yet.<br>Generate and save your first story! 🌟</p>';
+    return;
+  }
+  el.innerHTML = lib.map((s, i) => `
+    <div class="bg-white/5 rounded-xl p-4 cursor-pointer hover:bg-white/10 transition-all" onclick="loadLibraryStory(${i})">
+      <div class="flex justify-between items-start">
+        <div class="flex-1">
+          <h3 class="font-bold text-sm">${s.title || 'Untitled'}</h3>
+          <p class="text-purple-200 text-xs mt-1">${new Date(s.savedAt).toLocaleDateString()} · ~${s.wordCount || '?'} words</p>
+          <div class="flex flex-wrap gap-1 mt-2">
+            ${(s.targetWords || []).slice(0, 4).map(w => `<span class="bg-amber-400/10 text-amber-300 px-2 py-0.5 rounded-full text-xs">${w}</span>`).join('')}
+          </div>
+        </div>
+        <div class="flex gap-2 ml-2">
+          <button onclick="event.stopPropagation();deleteLibraryStory(${i})" class="w-9 h-9 rounded-full bg-red-500/10 flex items-center justify-center text-sm">🗑️</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function loadLibraryStory(index) {
+  const lib = getLibrary();
+  currentStory = lib[index];
+  displayStory(currentStory);
+  showScreen('home');
+}
+
+function deleteLibraryStory(index) {
+  if (!confirm('Delete this story?')) return;
+  const lib = getLibrary();
+  lib.splice(index, 1);
+  saveLibraryData(lib);
+  updateLibraryUI();
+  showToast('🗑️ Story deleted');
+}
+
+// Init
+(function init() {
+  updateGreeting();
+  // Check if first visit
+  if (!getProfile()) {
+    setTimeout(() => {
+      showToast('👋 Set up your child\'s profile to get started!', 3500);
+    }, 1000);
+  }
+})();
+</script>
+</body>
+</html>
